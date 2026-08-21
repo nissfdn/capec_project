@@ -1,0 +1,963 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MITRE CAPEC Security Explorer</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Google Fonts Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        dark: {
+                            900: '#0B0F19',
+                            800: '#111827',
+                            700: '#1F2937',
+                            600: '#374151'
+                        },
+                        cyber: {
+                            blue: '#3B82F6',
+                            cyan: '#06B6D4',
+                            emerald: '#10B981',
+                            amber: '#F59E0B',
+                            rose: '#F43F5E',
+                            purple: '#8B5CF6'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .code-font { font-family: 'JetBrains Mono', monospace; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #111827; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #4B5563; }
+    </style>
+</head>
+<body class="bg-dark-900 text-gray-100 min-h-screen flex flex-col antialiased selection:bg-cyber-blue selection:text-white">
+
+    <!-- TOP NAVIGATION HEADER -->
+    <header class="border-b border-gray-800 bg-dark-800/80 backdrop-blur sticky top-0 z-30">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyber-blue to-cyber-cyan flex items-center justify-center shadow-lg shadow-cyber-blue/20">
+                    <i class="fa-solid fa-shield-halved text-white text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold tracking-tight bg-gradient-to-r from-white via-gray-200 to-gray-400 bg-clip-text text-transparent flex items-center gap-2">
+                        MITRE CAPEC™ Explorer
+                        <span class="text-xs font-mono font-medium text-cyber-cyan bg-cyber-cyan/10 border border-cyber-cyan/20 px-2 py-0.5 rounded-md">v2.0</span>
+                    </h1>
+                    <p class="text-xs text-gray-400">Common Attack Pattern Enumeration and Classification</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-3">
+                <button id="refreshBtn" onclick="refreshData()" class="flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-xs font-medium border border-gray-700 text-gray-300 transition-all">
+                    <i class="fa-solid fa-rotate text-cyber-cyan" id="refreshIcon"></i>
+                    <span>Refresh Data</span>
+                </button>
+                <a href="https://capec.mitre.org/" target="_blank" class="flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-cyber-blue/10 hover:bg-cyber-blue/20 text-xs font-medium text-cyber-blue border border-cyber-blue/20 transition-all">
+                    <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                    <span>Official MITRE CAPEC Site</span>
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        <!-- DASHBOARD METRIC CARDS -->
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4" id="statsContainer">
+            <div class="bg-dark-800/60 border border-gray-800 rounded-xl p-4 flex flex-col justify-between hover:border-gray-700 transition">
+                <div class="flex justify-between items-center text-gray-400 text-xs font-medium mb-2">
+                    <span>TOTAL CAPECs</span>
+                    <i class="fa-solid fa-layer-group text-cyber-blue"></i>
+                </div>
+                <div class="text-2xl font-bold text-white font-mono" id="statTotal">-</div>
+                <div class="text-[11px] text-gray-400 mt-1" id="statSubTotal">All Attack Patterns</div>
+            </div>
+
+            <div class="bg-dark-800/60 border border-gray-800 rounded-xl p-4 flex flex-col justify-between hover:border-gray-700 transition">
+                <div class="flex justify-between items-center text-gray-400 text-xs font-medium mb-2">
+                    <span>HIGH SEVERITY</span>
+                    <i class="fa-solid fa-triangle-exclamation text-cyber-rose"></i>
+                </div>
+                <div class="text-2xl font-bold text-cyber-rose font-mono" id="statHighSev">-</div>
+                <div class="text-[11px] text-gray-400 mt-1">High & Very High</div>
+            </div>
+
+            <div class="bg-dark-800/60 border border-gray-800 rounded-xl p-4 flex flex-col justify-between hover:border-gray-700 transition">
+                <div class="flex justify-between items-center text-gray-400 text-xs font-medium mb-2">
+                    <span>HIGH LIKELIHOOD</span>
+                    <i class="fa-solid fa-bolt text-cyber-amber"></i>
+                </div>
+                <div class="text-2xl font-bold text-cyber-amber font-mono" id="statHighLikelihood">-</div>
+                <div class="text-[11px] text-gray-400 mt-1">High Attack Likelihood</div>
+            </div>
+
+            <div class="bg-dark-800/60 border border-gray-800 rounded-xl p-4 flex flex-col justify-between hover:border-gray-700 transition">
+                <div class="flex justify-between items-center text-gray-400 text-xs font-medium mb-2">
+                    <span>LINKED CWEs</span>
+                    <i class="fa-solid fa-bug text-cyber-purple"></i>
+                </div>
+                <div class="text-2xl font-bold text-cyber-purple font-mono" id="statTotalCWE">-</div>
+                <div class="text-[11px] text-gray-400 mt-1">Matching Weaknesses</div>
+            </div>
+
+            <div class="bg-dark-800/60 border border-gray-800 rounded-xl p-4 flex flex-col justify-between hover:border-gray-700 transition">
+                <div class="flex justify-between items-center text-gray-400 text-xs font-medium mb-2">
+                    <span>EXECUTION FLOWS</span>
+                    <i class="fa-solid fa-route text-cyber-emerald"></i>
+                </div>
+                <div class="text-2xl font-bold text-cyber-emerald font-mono" id="statExecFlow">-</div>
+                <div class="text-[11px] text-gray-400 mt-1">Step-by-Step Pipeline</div>
+            </div>
+        </div>
+
+        <!-- SEARCH & FILTER CONTROLS BAR -->
+        <div class="bg-dark-800 border border-gray-800 rounded-2xl p-4 space-y-4 shadow-xl">
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
+                <!-- Search Input -->
+                <div class="md:col-span-4 relative">
+                    <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                    </div>
+                    <input type="text" id="searchInput" placeholder="Search CAPEC-ID, Name, Description, or CWE-ID..."
+                           class="w-full pl-10 pr-4 py-2 bg-dark-900 border border-gray-700 rounded-xl text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-cyber-blue focus:ring-1 focus:ring-cyber-blue transition">
+                </div>
+
+                <!-- Severity Filter -->
+                <div class="md:col-span-2">
+                    <select id="filterSeverity" class="w-full px-3 py-2 bg-dark-900 border border-gray-700 rounded-xl text-sm text-gray-200 focus:outline-none focus:border-cyber-blue transition">
+                        <option value="">Severity (All)</option>
+                        <option value="Very High">Very High</option>
+                        <option value="High">High</option>
+                        <option value="Medium">Medium</option>
+                        <option value="Low">Low</option>
+                        <option value="Very Low">Very Low</option>
+                    </select>
+                </div>
+
+                <!-- Likelihood Filter -->
+                <div class="md:col-span-2">
+                    <select id="filterLikelihood" class="w-full px-3 py-2 bg-dark-900 border border-gray-700 rounded-xl text-sm text-gray-200 focus:outline-none focus:border-cyber-blue transition">
+                        <option value="">Likelihood (All)</option>
+                        <option value="High">High</option>
+                        <option value="Medium">Medium</option>
+                        <option value="Low">Low</option>
+                    </select>
+                </div>
+
+                <!-- Abstraction Filter -->
+                <div class="md:col-span-2">
+                    <select id="filterAbstraction" class="w-full px-3 py-2 bg-dark-900 border border-gray-700 rounded-xl text-sm text-gray-200 focus:outline-none focus:border-cyber-blue transition">
+                        <option value="">Abstraction (All)</option>
+                        <option value="Category">Category</option>
+                        <option value="Standard">Standard</option>
+                        <option value="Detailed">Detailed</option>
+                        <option value="Meta">Meta</option>
+                    </select>
+                </div>
+
+                <!-- Status Filter -->
+                <div class="md:col-span-2">
+                    <select id="filterStatus" class="w-full px-3 py-2 bg-dark-900 border border-gray-700 rounded-xl text-sm text-gray-200 focus:outline-none focus:border-cyber-blue transition">
+                        <option value="">Status (All)</option>
+                        <option value="Stable">Stable</option>
+                        <option value="Draft">Draft</option>
+                        <option value="Incomplete">Incomplete</option>
+                        <option value="Deprecated">Deprecated</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Sorting & Active Filters Summary -->
+            <div class="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-gray-800 text-xs">
+                <div class="flex items-center gap-3 text-gray-400">
+                    <span>Sort By:</span>
+                    <button onclick="setSort('id')" id="sortBtnId" class="px-2.5 py-1 rounded bg-gray-700 text-white font-medium">ID <i id="sortIconId" class="fa-solid fa-arrow-down-short-wide"></i></button>
+                    <button onclick="setSort('severity')" id="sortBtnSev" class="px-2.5 py-1 rounded bg-gray-800 text-gray-400 hover:text-white">Severity</button>
+                    <button onclick="setSort('likelihood')" id="sortBtnLik" class="px-2.5 py-1 rounded bg-gray-800 text-gray-400 hover:text-white">Likelihood</button>
+                    <button onclick="setSort('name')" id="sortBtnName" class="px-2.5 py-1 rounded bg-gray-800 text-gray-400 hover:text-white">Name</button>
+                </div>
+
+                <div class="flex items-center gap-3 text-gray-400">
+                    <button onclick="resetFilters()" class="text-cyber-cyan hover:underline flex items-center gap-1">
+                        <i class="fa-solid fa-filter-circle-xmark"></i> Clear Filters
+                    </button>
+                    <span>Items Per Page:</span>
+                    <select id="limitSelect" onchange="changeLimit()" class="bg-dark-900 border border-gray-700 rounded px-2 py-0.5 text-xs text-gray-200">
+                        <option value="10">10</option>
+                        <option value="25" selected>25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- CAPEC DATA TABLE -->
+        <div class="bg-dark-800 border border-gray-800 rounded-2xl overflow-hidden shadow-2xl">
+            <div class="overflow-x-auto custom-scrollbar">
+                <table class="w-full text-left text-sm">
+                    <thead class="bg-dark-900/80 text-gray-400 uppercase text-[11px] font-semibold border-b border-gray-800 tracking-wider">
+                        <tr>
+                            <th class="py-3.5 px-4 w-28">CAPEC ID</th>
+                            <th class="py-3.5 px-4">Attack Pattern Name & Description</th>
+                            <th class="py-3.5 px-4 w-32">Severity</th>
+                            <th class="py-3.5 px-4 w-32">Likelihood</th>
+                            <th class="py-3.5 px-4 w-40">Properties</th>
+                            <th class="py-3.5 px-4 w-28 text-right">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody" class="divide-y divide-gray-800/60 text-gray-300">
+                        <!-- Table rows populated dynamically -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Loading Spinner -->
+            <div id="loadingState" class="py-12 flex flex-col items-center justify-center text-gray-400 gap-3">
+                <i class="fa-solid fa-circle-notch fa-spin text-3xl text-cyber-blue"></i>
+                <span class="text-xs">Loading CAPEC Data...</span>
+            </div>
+
+            <!-- Empty State -->
+            <div id="emptyState" class="hidden py-12 flex flex-col items-center justify-center text-gray-400 gap-3">
+                <i class="fa-solid fa-folder-open text-4xl text-gray-600"></i>
+                <span class="text-sm font-medium">No CAPEC records found matching your search or filters.</span>
+            </div>
+
+            <!-- Pagination Bar -->
+            <div class="bg-dark-900/60 px-4 py-3 border-t border-gray-800 flex items-center justify-between text-xs text-gray-400">
+                <div id="paginationInfo">Page 1 of 1 (0 total items)</div>
+                <div class="flex items-center gap-2">
+                    <button id="prevPageBtn" onclick="changePage(-1)" class="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 disabled:opacity-40 disabled:cursor-not-allowed">
+                        <i class="fa-solid fa-chevron-left mr-1"></i> Previous
+                    </button>
+                    <span id="pageBadge" class="px-3 py-1 font-mono text-gray-300 bg-dark-900 border border-gray-700 rounded-lg">1</span>
+                    <button id="nextPageBtn" onclick="changePage(1)" class="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 disabled:opacity-40 disabled:cursor-not-allowed">
+                        Next <i class="fa-solid fa-chevron-right ml-1"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- FULL DETAIL MODAL -->
+    <div id="detailModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-3 sm:p-6 transition-opacity duration-200">
+        <div class="bg-dark-800 border border-gray-700 w-full max-w-5xl h-[90vh] rounded-2xl flex flex-col overflow-hidden shadow-2xl">
+
+            <!-- Modal Header -->
+            <div class="p-5 border-b border-gray-700 bg-dark-900 flex items-start justify-between gap-4">
+                <div>
+                    <div class="flex flex-wrap items-center gap-2 mb-1.5">
+                        <span id="modalCapecId" class="font-mono text-lg font-bold text-cyber-cyan bg-cyber-cyan/10 border border-cyber-cyan/30 px-2.5 py-0.5 rounded-md">CAPEC-000</span>
+                        <span id="modalAbstraction" class="text-xs px-2 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-300 font-medium">Standard</span>
+                        <span id="modalStatus" class="text-xs px-2 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-300 font-medium">Stable</span>
+                        <span id="modalSeverityBadge" class="text-xs font-semibold px-2.5 py-0.5 rounded-md">High</span>
+                        <span id="modalLikelihoodBadge" class="text-xs font-semibold px-2.5 py-0.5 rounded-md">Medium</span>
+                    </div>
+                    <h2 id="modalTitle" class="text-xl font-bold text-white tracking-tight">Attack Pattern Name</h2>
+                </div>
+
+                <button onclick="closeModal()" class="w-9 h-9 rounded-xl bg-gray-800 hover:bg-gray-700 border border-gray-700 flex items-center justify-center text-gray-400 hover:text-white transition">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <!-- Modal Tab Navigation -->
+            <div class="bg-dark-900/80 px-5 border-b border-gray-800 flex overflow-x-auto custom-scrollbar gap-2 text-xs font-medium text-gray-400">
+                <button onclick="switchTab('overview')" id="tabBtnOverview" class="py-3 px-3 border-b-2 border-cyber-blue text-cyber-blue flex items-center gap-2 whitespace-nowrap">
+                    <i class="fa-solid fa-align-left"></i> Overview & Description
+                </button>
+                <button onclick="switchTab('execflow')" id="tabBtnExecflow" class="py-3 px-3 border-b-2 border-transparent hover:text-gray-200 flex items-center gap-2 whitespace-nowrap">
+                    <i class="fa-solid fa-route"></i> Execution Flow
+                </button>
+                <button onclick="switchTab('relations')" id="tabBtnRelations" class="py-3 px-3 border-b-2 border-transparent hover:text-gray-200 flex items-center gap-2 whitespace-nowrap">
+                    <i class="fa-solid fa-diagram-project"></i> CWE & CAPEC Relationships
+                </button>
+                <button onclick="switchTab('consequences')" id="tabBtnConsequences" class="py-3 px-3 border-b-2 border-transparent hover:text-gray-200 flex items-center gap-2 whitespace-nowrap">
+                    <i class="fa-solid fa-radiation"></i> Consequences & Impacts
+                </button>
+                <button onclick="switchTab('mitigations')" id="tabBtnMitigations" class="py-3 px-3 border-b-2 border-transparent hover:text-gray-200 flex items-center gap-2 whitespace-nowrap">
+                    <i class="fa-solid fa-shield-virus"></i> Mitigations
+                </button>
+                <button onclick="switchTab('skills')" id="tabBtnSkills" class="py-3 px-3 border-b-2 border-transparent hover:text-gray-200 flex items-center gap-2 whitespace-nowrap">
+                    <i class="fa-solid fa-list-check"></i> Skills, Taxonomies & Notes
+                </button>
+            </div>
+
+            <!-- Modal Content Body -->
+            <div class="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar bg-dark-800 text-sm">
+
+                <!-- TAB 1: OVERVIEW -->
+                <div id="tabContentOverview" class="space-y-6">
+                    <div>
+                        <h3 class="text-xs uppercase font-bold text-gray-400 tracking-wider mb-2 flex items-center gap-2">
+                            <i class="fa-solid fa-file-lines text-cyber-blue"></i> Description
+                        </h3>
+                        <div id="modalDescription" class="bg-dark-900/80 border border-gray-800 rounded-xl p-4 text-gray-200 leading-relaxed font-light whitespace-pre-wrap"></div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <h3 class="text-xs uppercase font-bold text-gray-400 tracking-wider mb-2 flex items-center gap-2">
+                                <i class="fa-solid fa-list-check text-cyber-cyan"></i> Prerequisites
+                            </h3>
+                            <div id="modalPrerequisites" class="bg-dark-900/80 border border-gray-800 rounded-xl p-4 text-gray-300"></div>
+                        </div>
+
+                        <div>
+                            <h3 class="text-xs uppercase font-bold text-gray-400 tracking-wider mb-2 flex items-center gap-2">
+                                <i class="fa-solid fa-wrench text-cyber-amber"></i> Resources & Tools Required
+                            </h3>
+                            <div id="modalResources" class="bg-dark-900/80 border border-gray-800 rounded-xl p-4 text-gray-300"></div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <h3 class="text-xs uppercase font-bold text-gray-400 tracking-wider mb-2 flex items-center gap-2">
+                                <i class="fa-solid fa-eye text-cyber-emerald"></i> Indicators / Signs
+                            </h3>
+                            <div id="modalIndicators" class="bg-dark-900/80 border border-gray-800 rounded-xl p-4 text-gray-300"></div>
+                        </div>
+
+                        <div>
+                            <h3 class="text-xs uppercase font-bold text-gray-400 tracking-wider mb-2 flex items-center gap-2">
+                                <i class="fa-solid fa-tags text-cyber-purple"></i> Alternate Terms
+                            </h3>
+                            <div id="modalAlternateTerms" class="bg-dark-900/80 border border-gray-800 rounded-xl p-4 text-gray-300"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 2: EXECUTION FLOW -->
+                <div id="tabContentExecflow" class="hidden space-y-4">
+                    <h3 class="text-xs uppercase font-bold text-gray-400 tracking-wider flex items-center gap-2">
+                        <i class="fa-solid fa-route text-cyber-emerald"></i> Step-by-Step Attack Execution Flow
+                    </h3>
+                    <div id="modalExecFlowContainer" class="space-y-4">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+
+                <!-- TAB 3: RELATIONS -->
+                <div id="tabContentRelations" class="hidden space-y-6">
+                    <div>
+                        <h3 class="text-xs uppercase font-bold text-gray-400 tracking-wider mb-3 flex items-center gap-2">
+                            <i class="fa-solid fa-bug text-cyber-purple"></i> Related Software Weaknesses (CWE)
+                        </h3>
+                        <p class="text-xs text-gray-400 mb-3">Click on any CWE link below to view its details on the official MITRE CWE database:</p>
+                        <div id="modalCweList" class="flex flex-wrap gap-2"></div>
+                    </div>
+
+                    <div class="border-t border-gray-800 pt-6">
+                        <h3 class="text-xs uppercase font-bold text-gray-400 tracking-wider mb-3 flex items-center gap-2">
+                            <i class="fa-solid fa-diagram-project text-cyber-cyan"></i> Related Attack Patterns (CAPEC)
+                        </h3>
+                        <div id="modalCapecRelationsList" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+                    </div>
+                </div>
+
+                <!-- TAB 4: CONSEQUENCES -->
+                <div id="tabContentConsequences" class="hidden space-y-6">
+                    <div>
+                        <h3 class="text-xs uppercase font-bold text-gray-400 tracking-wider mb-3 flex items-center gap-2">
+                            <i class="fa-solid fa-bullseye text-cyber-rose"></i> Affected Scopes
+                        </h3>
+                        <div id="modalScopes" class="flex flex-wrap gap-2"></div>
+                    </div>
+
+                    <div class="border-t border-gray-800 pt-6">
+                        <h3 class="text-xs uppercase font-bold text-gray-400 tracking-wider mb-3 flex items-center gap-2">
+                            <i class="fa-solid fa-explosion text-cyber-amber"></i> Technical Impacts
+                        </h3>
+                        <div id="modalTechnicalImpacts" class="flex flex-wrap gap-2"></div>
+                    </div>
+                </div>
+
+                <!-- TAB 5: MITIGATIONS -->
+                <div id="tabContentMitigations" class="hidden space-y-4">
+                    <h3 class="text-xs uppercase font-bold text-gray-400 tracking-wider flex items-center gap-2">
+                        <i class="fa-solid fa-shield-virus text-cyber-emerald"></i> Security Mitigations & Prevention Strategies
+                    </h3>
+                    <div id="modalMitigationsContainer" class="space-y-3"></div>
+                </div>
+
+                <!-- TAB 6: SKILLS & TAXONOMIES & NOTES -->
+                <div id="tabContentSkills" class="hidden space-y-6">
+                    <div>
+                        <h3 class="text-xs uppercase font-bold text-gray-400 tracking-wider mb-3 flex items-center gap-2">
+                            <i class="fa-solid fa-user-ninja text-cyber-amber"></i> Skills Required
+                        </h3>
+                        <div id="modalSkillsContainer" class="bg-dark-900/80 border border-gray-800 rounded-xl p-4 text-gray-300"></div>
+                    </div>
+
+                    <div class="border-t border-gray-800 pt-6">
+                        <h3 class="text-xs uppercase font-bold text-gray-400 tracking-wider mb-3 flex items-center gap-2">
+                            <i class="fa-solid fa-sitemap text-cyber-blue"></i> Taxonomy Mappings
+                        </h3>
+                        <div id="modalTaxonomiesContainer" class="bg-dark-900/80 border border-gray-800 rounded-xl p-4 text-gray-300"></div>
+                    </div>
+
+                    <div class="border-t border-gray-800 pt-6">
+                        <h3 class="text-xs uppercase font-bold text-gray-400 tracking-wider mb-3 flex items-center gap-2">
+                            <i class="fa-solid fa-vial text-cyber-purple"></i> Real-World Example Instances
+                        </h3>
+                        <div id="modalExamplesContainer" class="bg-dark-900/80 border border-gray-800 rounded-xl p-4 text-gray-300"></div>
+                    </div>
+
+                    <div class="border-t border-gray-800 pt-6">
+                        <h3 class="text-xs uppercase font-bold text-gray-400 tracking-wider mb-3 flex items-center gap-2">
+                            <i class="fa-solid fa-note-sticky text-gray-400"></i> Notes & Observations
+                        </h3>
+                        <div id="modalNotesContainer" class="bg-dark-900/80 border border-gray-800 rounded-xl p-4 text-gray-300"></div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="p-4 border-t border-gray-700 bg-dark-900 flex items-center justify-between text-xs text-gray-400">
+                <span class="font-mono">MITRE CAPEC Database Entry</span>
+                <button onclick="closeModal()" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg font-medium border border-gray-700 transition">
+                    Close
+                </button>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT APP LOGIC -->
+    <script>
+        let currentPage = 1;
+        let currentLimit = 25;
+        let currentSortBy = 'id';
+        let currentSortDir = 'asc';
+        let activeTab = 'overview';
+        let capecCacheMap = {};
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadStats();
+            fetchCapecs();
+
+            // Search input debounce
+            let debounceTimer;
+            document.getElementById('searchInput').addEventListener('input', () => {
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(() => {
+                    currentPage = 1;
+                    fetchCapecs();
+                }, 300);
+            });
+
+            // Filter dropdown listeners
+            ['filterSeverity', 'filterLikelihood', 'filterAbstraction', 'filterStatus'].forEach(id => {
+                document.getElementById(id).addEventListener('change', () => {
+                    currentPage = 1;
+                    fetchCapecs();
+                });
+            });
+        });
+
+        async function loadStats() {
+            try {
+                const res = await fetch('/api/stats');
+                const data = await res.json();
+
+                document.getElementById('statTotal').innerText = data.total || 0;
+
+                const highSev = (data.severity['High'] || 0) + (data.severity['Very High'] || 0);
+                document.getElementById('statHighSev').innerText = highSev;
+
+                const highLik = data.likelihood['High'] || 0;
+                document.getElementById('statHighLikelihood').innerText = highLik;
+
+                document.getElementById('statTotalCWE').innerText = data.total_cwes_linked || 0;
+                document.getElementById('statExecFlow').innerText = data.total_with_execution_flow || 0;
+            } catch (e) {
+                console.error("Stats loading error:", e);
+            }
+        }
+
+        async function fetchCapecs() {
+            document.getElementById('loadingState').classList.remove('hidden');
+            document.getElementById('emptyState').classList.add('hidden');
+            document.getElementById('tableBody').innerHTML = '';
+
+            const search = document.getElementById('searchInput').value;
+            const severity = document.getElementById('filterSeverity').value;
+            const likelihood = document.getElementById('filterLikelihood').value;
+            const abstraction = document.getElementById('filterAbstraction').value;
+            const status = document.getElementById('filterStatus').value;
+
+            const url = new URL('/api/capecs', window.location.origin);
+            url.searchParams.set('page', currentPage);
+            url.searchParams.set('limit', currentLimit);
+            url.searchParams.set('sort_by', currentSortBy);
+            url.searchParams.set('sort_dir', currentSortDir);
+            if (search) url.searchParams.set('search', search);
+            if (severity) url.searchParams.set('severity', severity);
+            if (likelihood) url.searchParams.set('likelihood', likelihood);
+            if (abstraction) url.searchParams.set('abstraction', abstraction);
+            if (status) url.searchParams.set('status', status);
+
+            try {
+                const res = await fetch(url);
+                const data = await res.json();
+                renderTable(data.items);
+                renderPagination(data.total, data.page, data.total_pages);
+            } catch (e) {
+                console.error("Error fetching CAPECs:", e);
+            } finally {
+                document.getElementById('loadingState').classList.add('hidden');
+            }
+        }
+
+        function getSeverityBadge(sev) {
+            if (!sev) return `<span class="px-2 py-0.5 rounded text-xs bg-gray-800 text-gray-400 border border-gray-700">Unspecified</span>`;
+            if (sev === 'Very High' || sev === 'High') {
+                return `<span class="px-2.5 py-0.5 rounded-md text-xs font-semibold bg-red-500/10 text-red-400 border border-red-500/20">${sev}</span>`;
+            } else if (sev === 'Medium') {
+                return `<span class="px-2.5 py-0.5 rounded-md text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">${sev}</span>`;
+            } else {
+                return `<span class="px-2.5 py-0.5 rounded-md text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">${sev}</span>`;
+            }
+        }
+
+        function getLikelihoodBadge(lik) {
+            if (!lik) return `<span class="px-2 py-0.5 rounded text-xs bg-gray-800 text-gray-400 border border-gray-700">-</span>`;
+            if (lik === 'High') {
+                return `<span class="px-2.5 py-0.5 rounded-md text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20">${lik}</span>`;
+            } else if (lik === 'Medium') {
+                return `<span class="px-2.5 py-0.5 rounded-md text-xs font-semibold bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">${lik}</span>`;
+            } else {
+                return `<span class="px-2.5 py-0.5 rounded-md text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">${lik}</span>`;
+            }
+        }
+
+        function renderTable(items) {
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+
+            if (!items || items.length === 0) {
+                document.getElementById('emptyState').classList.remove('hidden');
+                return;
+            }
+
+            items.forEach(item => {
+                capecCacheMap[item.id] = item;
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-gray-800/40 transition-colors group cursor-pointer";
+                tr.onclick = (e) => {
+                    if (e.target.tagName !== 'BUTTON' && e.target.tagName !== 'A' && !e.target.closest('button')) {
+                        openModal(item.id);
+                    }
+                };
+
+                const cweCount = item.related_weaknesses_parsed ? item.related_weaknesses_parsed.length : 0;
+                const flowCount = item.execution_flow_parsed ? item.execution_flow_parsed.length : 0;
+                const mitigationsCount = item.mitigations_parsed ? item.mitigations_parsed.length : 0;
+
+                tr.innerHTML = `
+                    <td class="py-3.5 px-4 font-mono font-bold text-cyber-cyan text-xs">
+                        CAPEC-${item.id}
+                    </td>
+                    <td class="py-3.5 px-4">
+                        <div class="font-semibold text-gray-100 text-sm group-hover:text-cyber-blue transition-colors flex items-center gap-2">
+                            ${escapeHtml(item.name || '')}
+                            <span class="text-[10px] px-1.5 py-0.2 rounded bg-gray-800 border border-gray-700 text-gray-400 font-normal">${item.abstraction || 'Standard'}</span>
+                        </div>
+                        <div class="text-xs text-gray-400 line-clamp-1 mt-0.5 font-light">
+                            ${escapeHtml(item.description || 'No description available.')}
+                        </div>
+                    </td>
+                    <td class="py-3.5 px-4">${getSeverityBadge(item.typical_severity)}</td>
+                    <td class="py-3.5 px-4">${getLikelihoodBadge(item.likelihood_of_attack)}</td>
+                    <td class="py-3.5 px-4">
+                        <div class="flex items-center gap-1.5 text-[11px] text-gray-400">
+                            ${cweCount > 0 ? `<span class="bg-purple-500/10 text-purple-400 border border-purple-500/20 px-1.5 py-0.5 rounded" title="${cweCount} Linked CWEs">${cweCount} CWEs</span>` : ''}
+                            ${flowCount > 0 ? `<span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded" title="${flowCount} Execution Steps">${flowCount} Steps</span>` : ''}
+                            ${mitigationsCount > 0 ? `<span class="bg-blue-500/10 text-blue-400 border border-blue-500/20 px-1.5 py-0.5 rounded" title="${mitigationsCount} Mitigations">${mitigationsCount} Mitigations</span>` : ''}
+                        </div>
+                    </td>
+                    <td class="py-3.5 px-4 text-right">
+                        <button onclick="openModal('${item.id}')" class="px-3 py-1.5 rounded-lg bg-cyber-blue/10 hover:bg-cyber-blue/20 text-cyber-blue text-xs font-medium border border-cyber-blue/20 transition-all">
+                            Details
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function renderPagination(total, page, totalPages) {
+            document.getElementById('paginationInfo').innerText = `Page ${page} of ${totalPages || 1} (${total} total items)`;
+            document.getElementById('pageBadge').innerText = page;
+            document.getElementById('prevPageBtn').disabled = (page <= 1);
+            document.getElementById('nextPageBtn').disabled = (page >= totalPages);
+        }
+
+        function changePage(delta) {
+            currentPage += delta;
+            fetchCapecs();
+        }
+
+        function changeLimit() {
+            currentLimit = parseInt(document.getElementById('limitSelect').value);
+            currentPage = 1;
+            fetchCapecs();
+        }
+
+        function setSort(col) {
+            if (currentSortBy === col) {
+                currentSortDir = (currentSortDir === 'asc') ? 'desc' : 'asc';
+            } else {
+                currentSortBy = col;
+                currentSortDir = 'asc';
+            }
+
+            ['Id', 'Sev', 'Lik', 'Name'].forEach(k => {
+                document.getElementById('sortBtn' + k).className = "px-2.5 py-1 rounded bg-gray-800 text-gray-400 hover:text-white";
+            });
+
+            const activeKey = col === 'id' ? 'Id' : col === 'severity' ? 'Sev' : col === 'likelihood' ? 'Lik' : 'Name';
+            document.getElementById('sortBtn' + activeKey).className = "px-2.5 py-1 rounded bg-gray-700 text-white font-medium";
+
+            currentPage = 1;
+            fetchCapecs();
+        }
+
+        function resetFilters() {
+            document.getElementById('searchInput').value = '';
+            document.getElementById('filterSeverity').value = '';
+            document.getElementById('filterLikelihood').value = '';
+            document.getElementById('filterAbstraction').value = '';
+            document.getElementById('filterStatus').value = '';
+            currentPage = 1;
+            fetchCapecs();
+        }
+
+        async function openModal(id) {
+            let item = capecCacheMap[id];
+            if (!item) {
+                const res = await fetch(`/api/capec/${id}`);
+                item = await res.json();
+            }
+
+            document.getElementById('modalCapecId').innerText = `CAPEC-${item.id}`;
+            document.getElementById('modalTitle').innerText = item.name || '';
+            document.getElementById('modalAbstraction').innerText = item.abstraction || 'Standard';
+            document.getElementById('modalStatus').innerText = item.status || 'Stable';
+
+            document.getElementById('modalSeverityBadge').outerHTML = `<span id="modalSeverityBadge" class="text-xs">${getSeverityBadge(item.typical_severity)}</span>`;
+            document.getElementById('modalLikelihoodBadge').outerHTML = `<span id="modalLikelihoodBadge" class="text-xs">${getLikelihoodBadge(item.likelihood_of_attack)}</span>`;
+
+            // TAB 1: OVERVIEW
+            document.getElementById('modalDescription').innerText = item.description || 'No description available.';
+
+            renderSimpleList('modalPrerequisites', item.prerequisites_parsed);
+            renderSimpleList('modalResources', item.resources_parsed);
+            renderSimpleList('modalIndicators', item.indicators_parsed);
+            renderSimpleList('modalAlternateTerms', item.alternate_terms_parsed);
+
+            // TAB 2: EXECUTION FLOW
+            renderExecutionFlow(item.execution_flow_parsed);
+
+            // TAB 3: RELATIONS (CWE & CAPEC)
+            renderCweList(item.related_weaknesses_parsed);
+            renderCapecRelationsList(item.related_attack_patterns_parsed);
+
+            // TAB 4: CONSEQUENCES
+            renderConsequences(item.consequences_parsed);
+
+            // TAB 5: MITIGATIONS
+            renderMitigations(item.mitigations_parsed);
+
+            // TAB 6: SKILLS, TAXONOMIES & NOTES
+            renderSkills(item.skills_required_parsed);
+            renderTaxonomies(item.taxonomy_mappings_parsed);
+            renderSimpleList('modalExamplesContainer', item.example_instances_parsed);
+            renderNotes(item.notes_parsed);
+
+            switchTab('overview');
+            document.getElementById('detailModal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('detailModal').classList.add('hidden');
+        }
+
+        function switchTab(tabName) {
+            activeTab = tabName;
+            ['overview', 'execflow', 'relations', 'consequences', 'mitigations', 'skills'].forEach(t => {
+                const btn = document.getElementById('tabBtn' + capitalize(t));
+                const content = document.getElementById('tabContent' + capitalize(t));
+
+                if (t === tabName) {
+                    btn.className = "py-3 px-3 border-b-2 border-cyber-blue text-cyber-blue font-semibold flex items-center gap-2 whitespace-nowrap";
+                    content.classList.remove('hidden');
+                } else {
+                    btn.className = "py-3 px-3 border-b-2 border-transparent hover:text-gray-200 flex items-center gap-2 whitespace-nowrap";
+                    content.classList.add('hidden');
+                }
+            });
+        }
+
+        function renderSimpleList(containerId, items) {
+            const el = document.getElementById(containerId);
+            if (!items || items.length === 0) {
+                el.innerHTML = '<span class="text-xs text-gray-500 italic">No data available.</span>';
+                return;
+            }
+            let html = '<ul class="space-y-1.5 text-xs font-light text-gray-300 list-disc list-inside">';
+            items.forEach(it => {
+                html += `<li>${escapeHtml(String(it))}</li>`;
+            });
+            html += '</ul>';
+            el.innerHTML = html;
+        }
+
+        function renderExecutionFlow(flow) {
+            const container = document.getElementById('modalExecFlowContainer');
+            if (!flow || flow.length === 0) {
+                container.innerHTML = '<div class="p-6 text-center text-xs text-gray-500 italic bg-dark-900/60 rounded-xl border border-gray-800">No step-by-step Execution Flow defined for this CAPEC.</div>';
+                return;
+            }
+
+            let html = '';
+            flow.forEach(step => {
+                const stepNum = step.step || '1';
+                const phase = step.phase || 'General';
+                const desc = step.description || '';
+                const techList = step.techniques || [];
+
+                html += `
+                    <div class="bg-dark-900/90 border border-gray-800 rounded-xl p-4 relative overflow-hidden flex gap-4">
+                        <div class="w-8 h-8 rounded-lg bg-cyber-blue/10 border border-cyber-blue/30 text-cyber-cyan font-mono font-bold text-xs flex items-center justify-center shrink-0">
+                            #${stepNum}
+                        </div>
+                        <div class="flex-1 space-y-2">
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs font-bold text-white uppercase tracking-wide bg-gray-800 border border-gray-700 px-2 py-0.5 rounded">${escapeHtml(phase)}</span>
+                            </div>
+                            <div class="text-xs text-gray-300 leading-relaxed font-light">${escapeHtml(desc)}</div>
+                            ${techList.length > 0 ? `
+                                <div class="pt-2 flex flex-wrap items-center gap-1.5">
+                                    <span class="text-[10px] text-gray-400 font-semibold uppercase">Techniques:</span>
+                                    ${techList.map(t => `<span class="text-[11px] bg-cyber-emerald/10 text-cyber-emerald border border-cyber-emerald/20 px-2 py-0.5 rounded-md">${escapeHtml(t)}</span>`).join('')}
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        }
+
+        function renderCweList(cwes) {
+            const el = document.getElementById('modalCweList');
+            if (!cwes || cwes.length === 0) {
+                el.innerHTML = '<span class="text-xs text-gray-500 italic">No related CWE weaknesses found.</span>';
+                return;
+            }
+
+            let html = '';
+            cwes.forEach(cweId => {
+                html += `
+                    <a href="https://cwe.mitre.org/data/definitions/${cweId}.html" target="_blank"
+                       class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/30 text-xs font-mono transition-all group">
+                        <i class="fa-solid fa-bug text-purple-400"></i>
+                        <span>CWE-${cweId}</span>
+                        <i class="fa-solid fa-arrow-up-right-from-square text-[10px] text-purple-400 opacity-60 group-hover:opacity-100"></i>
+                    </a>
+                `;
+            });
+            el.innerHTML = html;
+        }
+
+        function renderCapecRelationsList(relations) {
+            const el = document.getElementById('modalCapecRelationsList');
+            if (!relations || relations.length === 0) {
+                el.innerHTML = '<span class="text-xs text-gray-500 italic">No related CAPEC attack patterns.</span>';
+                return;
+            }
+
+            let html = '';
+            relations.forEach(rel => {
+                const nature = rel[0] || 'RelatesTo';
+                const id = rel[1] || '';
+                html += `
+                    <div onclick="openModal('${id}')" class="p-3 bg-dark-900/80 border border-gray-800 hover:border-cyber-cyan/40 rounded-xl flex items-center justify-between cursor-pointer transition">
+                        <div class="flex items-center gap-2">
+                            <span class="text-[10px] font-semibold text-cyber-cyan bg-cyber-cyan/10 border border-cyber-cyan/20 px-2 py-0.5 rounded">${escapeHtml(nature)}</span>
+                            <span class="font-mono font-bold text-xs text-white">CAPEC-${id}</span>
+                        </div>
+                        <i class="fa-solid fa-chevron-right text-xs text-gray-500"></i>
+                    </div>
+                `;
+            });
+            el.innerHTML = html;
+        }
+
+        function renderConsequences(cons) {
+            const scopeEl = document.getElementById('modalScopes');
+            const impactEl = document.getElementById('modalTechnicalImpacts');
+
+            const scopes = (cons && cons.scope) ? cons.scope : [];
+            const impacts = (cons && cons.technical_impact) ? cons.technical_impact : [];
+
+            if (scopes.length === 0) {
+                scopeEl.innerHTML = '<span class="text-xs text-gray-500 italic">No specified scope.</span>';
+            } else {
+                scopeEl.innerHTML = scopes.map(s => `<span class="px-3 py-1 rounded-lg bg-rose-500/10 text-rose-300 border border-rose-500/30 text-xs font-medium">${escapeHtml(s)}</span>`).join('');
+            }
+
+            if (impacts.length === 0) {
+                impactEl.innerHTML = '<span class="text-xs text-gray-500 italic">No specified technical impact.</span>';
+            } else {
+                impactEl.innerHTML = impacts.map(i => `<span class="px-3 py-1 rounded-lg bg-amber-500/10 text-amber-300 border border-amber-500/30 text-xs font-medium">${escapeHtml(i)}</span>`).join('');
+            }
+        }
+
+        function renderMitigations(mitigations) {
+            const container = document.getElementById('modalMitigationsContainer');
+            if (!mitigations || mitigations.length === 0) {
+                container.innerHTML = '<div class="p-6 text-center text-xs text-gray-500 italic bg-dark-900/60 rounded-xl border border-gray-800">No mitigation information specified.</div>';
+                return;
+            }
+
+            let html = '';
+            mitigations.forEach((m, idx) => {
+                html += `
+                    <div class="bg-dark-900/80 border border-gray-800 rounded-xl p-4 flex gap-3 text-xs text-gray-200 font-light leading-relaxed">
+                        <i class="fa-solid fa-shield-check text-cyber-emerald text-base shrink-0 mt-0.5"></i>
+                        <div>${escapeHtml(m)}</div>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        }
+
+        function renderSkills(skills) {
+            const container = document.getElementById('modalSkillsContainer');
+            if (!skills || skills.length === 0) {
+                container.innerHTML = '<span class="text-xs text-gray-500 italic">No specific required skills specified.</span>';
+                return;
+            }
+
+            let html = '<div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">';
+            skills.forEach(s => {
+                html += `
+                    <div class="p-2.5 bg-dark-800 border border-gray-700 rounded-lg flex items-center justify-between">
+                        <span class="font-medium text-gray-200">${escapeHtml(s.skill || 'Skill')}</span>
+                        <span class="px-2 py-0.5 rounded bg-cyber-amber/10 text-cyber-amber border border-cyber-amber/30 text-[11px] font-semibold">${escapeHtml(s.level || 'Medium')}</span>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        function renderTaxonomies(taxonomies) {
+            const container = document.getElementById('modalTaxonomiesContainer');
+            if (!taxonomies || taxonomies.length === 0) {
+                container.innerHTML = '<span class="text-xs text-gray-500 italic">No taxonomy mappings available.</span>';
+                return;
+            }
+
+            let html = '<div class="space-y-2 text-xs">';
+            taxonomies.forEach(t => {
+                html += `
+                    <div class="p-3 bg-dark-800 border border-gray-700 rounded-lg flex flex-wrap items-center justify-between gap-2">
+                        <div class="font-semibold text-cyber-blue">${escapeHtml(t.taxonomy_name)}</div>
+                        <div class="font-mono text-gray-300">ID: ${escapeHtml(t.entry_id)}</div>
+                        <div class="text-gray-400 italic">${escapeHtml(t.entry_name)}</div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        function renderNotes(notes) {
+            const container = document.getElementById('modalNotesContainer');
+            if (!notes || notes.length === 0) {
+                container.innerHTML = '<span class="text-xs text-gray-500 italic">No notes available.</span>';
+                return;
+            }
+
+            let html = '<div class="space-y-2.5 text-xs">';
+            notes.forEach(n => {
+                html += `
+                    <div class="p-3 bg-dark-800 border border-gray-700 rounded-lg space-y-1">
+                        <div class="font-bold text-gray-400 uppercase text-[10px] tracking-wider">${escapeHtml(n.type || 'Note')}</div>
+                        <div class="text-gray-300 font-light leading-relaxed">${escapeHtml(n.note)}</div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        async function refreshData() {
+            const btn = document.getElementById('refreshBtn');
+            const icon = document.getElementById('refreshIcon');
+            btn.disabled = true;
+            icon.classList.add('fa-spin');
+
+            try {
+                const res = await fetch('/api/refresh', { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    alert(`MITRE CAPEC Data Successfully Refreshed! Total Records: ${data.count}`);
+                    loadStats();
+                    fetchCapecs();
+                } else {
+                    alert("Error: " + data.error);
+                }
+            } catch (e) {
+                alert("Refresh Error: " + e);
+            } finally {
+                btn.disabled = false;
+                icon.classList.remove('fa-spin');
+            }
+        }
+
+        function capitalize(s) {
+            return s.charAt(0).toUpperCase() + s.slice(1);
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+    </script>
+</body>
+</html>

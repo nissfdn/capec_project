@@ -1,26 +1,10 @@
-import requests
-import zipfile
-import io
-import pandas as pd
 import os
+import io
+import json
+import zipfile
+import csv
+import requests
 
-from supabase import create_client
-from dotenv import load_dotenv
-
-# .env dosyasındaki çevresel değişkenleri (API anahtarları vb.) sisteme yükler
-load_dotenv()
-
-# Supabase bağlantı için gerekli URL ve Key bilgilerini ortam değişkenlerinden alır
-supabase_url = os.getenv("SUPABASE_URL")
-supabase_key = os.getenv("SUPABASE_KEY")
-
-# Supabase veritabanı istemcisini (client) oluşturur
-supabase = create_client(
-    supabase_url,
-    supabase_key
-)
-
-# Harici olarak hazırladığımız parser (ayrıştırma) fonksiyonlarını projeye dahil eder
 from capec_parser import (
     parse_related_weaknesses,
     parse_related_attack_patterns,
@@ -38,182 +22,133 @@ from capec_parser import (
     convert_tuples
 )
 
+ZIP_URL = "https://capec.mitre.org/data/csv/2000.csv.zip"
+JSON_CACHE_FILE = "capec_data.json"
 
-# ============================================================
-# 1. MITRE CAPEC VERİSİNİ İNDİRME
-# ============================================================
+COLUMN_MAPPING = {
+    "ID": "id",
+    "Name": "name",
+    "Abstraction": "abstraction",
+    "Status": "status",
+    "Description": "description",
+    "Alternate Terms": "alternate_terms",
+    "Likelihood Of Attack": "likelihood_of_attack",
+    "Typical Severity": "typical_severity",
+    "Related Attack Patterns": "related_attack_patterns",
+    "Execution Flow": "execution_flow",
+    "Prerequisites": "prerequisites",
+    "Skills Required": "skills_required",
+    "Resources Required": "resources_required",
+    "Indicators": "indicators",
+    "Consequences": "consequences",
+    "Mitigations": "mitigations",
+    "Example Instances": "example_instances",
+    "Related Weaknesses": "related_weaknesses",
+    "Taxonomy Mappings": "taxonomy_mappings",
+    "Notes": "notes"
+}
 
-# MITRE güncel CAPEC CSV verisinin sıkıştırılmış (ZIP) indirme adresi
-url = "https://capec.mitre.org/data/csv/2000.csv.zip"
+def clean_val(v):
+    if v is None:
+        return None
+    s = str(v).strip()
+    return s if s else None
 
-print("\n========================================")
-print("CAPEC UPDATE TEST")
-print("========================================")
+def load_or_fetch_capec_data(force_refresh=False):
+    """
+    Returns list of parsed CAPEC dict records.
+    If cached JSON exists and force_refresh is False, loads from disk.
+    Otherwise downloads zip, parses CSV, caches JSON, and returns data.
+    """
+    if not force_refresh and os.path.exists(JSON_CACHE_FILE):
+        try:
+            with open(JSON_CACHE_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                print(f"[CACHE] Loaded {len(data)} CAPEC records from {JSON_CACHE_FILE}")
+                return data
+        except Exception as e:
+            print(f"[CACHE] Error loading cache: {e}. Fetching fresh data...")
 
-print("\n1. MITRE CAPEC verisi indiriliyor...")
+    print(f"[FETCH] Downloading MITRE CAPEC zip from {ZIP_URL}...")
+    resp = requests.get(ZIP_URL, timeout=30)
+    resp.raise_for_status()
 
-# URL üzerinden HTTP GET isteği ile ZIP dosyasını indirir
-response = requests.get(url)
+    capec_records = []
 
-# İndirme işleminde bir hata oluştuysa (örn. 404, 500) programı durdurur
-response.raise_for_status()
+    with zipfile.ZipFile(io.BytesIO(resp.content)) as z:
+        filename = "2000.csv" if "2000.csv" in z.namelist() else z.namelist()[0]
+        with z.open(filename) as f:
+            text_stream = io.TextIOWrapper(f, encoding="utf-8-sig")
+            reader = csv.DictReader(text_stream)
 
-print("MITRE verisi başarıyla indirildi.")
+            # Strip spaces / quotes from header names
+            raw_fieldnames = reader.fieldnames or []
+            clean_field_map = {}
+            for fn in raw_fieldnames:
+                clean_name = fn.strip().replace("'", "")
+                mapped_name = COLUMN_MAPPING.get(clean_name, clean_name.lower().replace(" ", "_"))
+                clean_field_map[fn] = mapped_name
 
+            for row in reader:
+                record = {}
+                for raw_col, val in row.items():
+                    target_col = clean_field_map.get(raw_col, raw_col)
+                    record[target_col] = clean_val(val)
 
-# ============================================================
-# 2. ZIP DOSYASINI BELLEKTE AÇMA VE OKUMA
-# ============================================================
+                # Execute Parsers
+                raw_rel_weak = record.get("related_weaknesses")
+                record["related_weaknesses_parsed"] = convert_tuples(parse_related_weaknesses(raw_rel_weak))
 
-# İndirilen byte verisini bellekte (RAM) bir dosya gibi açar
-with zipfile.ZipFile(
-    io.BytesIO(response.content)
-) as zip_file:
+                raw_rel_att = record.get("related_attack_patterns")
+                record["related_attack_patterns_parsed"] = convert_tuples(parse_related_attack_patterns(raw_rel_att))
 
-    print("\nZIP içerisindeki dosyalar:")
-    print(zip_file.namelist())
+                raw_alt_terms = record.get("alternate_terms")
+                record["alternate_terms_parsed"] = convert_tuples(parse_alternate_terms(raw_alt_terms))
 
-    # ZIP arşivinin içinden ana CSV dosyasını okur
-    with zip_file.open("2000.csv") as csv_file:
+                raw_prereqs = record.get("prerequisites")
+                record["prerequisites_parsed"] = convert_tuples(parse_prerequisites(raw_prereqs))
 
-        # CSV dosyasını Pandas DataFrame yapısına aktarır
-        df = pd.read_csv(
-            csv_file,
-            index_col=False
-        )
+                raw_skills = record.get("skills_required")
+                record["skills_required_parsed"] = convert_tuples(parse_skills_required(raw_skills))
 
+                raw_resources = record.get("resources_required")
+                record["resources_required_parsed"] = convert_tuples(parse_resources_required(raw_resources))
 
-print("\nCSV başarıyla DataFrame'e aktarıldı.")
-print("CAPEC kayıt sayısı:", len(df))
+                raw_indicators = record.get("indicators")
+                record["indicators_parsed"] = convert_tuples(parse_indicators(raw_indicators))
 
+                raw_consequences = record.get("consequences")
+                record["consequences_parsed"] = convert_tuples(parse_consequences(raw_consequences))
 
-# ============================================================
-# 3. KOLON İSİMLERİNİ DÜZENLEME VE STANDARTLAŞTIRMA
-# ============================================================
+                raw_mitigations = record.get("mitigations")
+                record["mitigations_parsed"] = convert_tuples(parse_mitigations(raw_mitigations))
 
-# Kolon adlarındaki olası baş/son boşlukları temizler
-df.columns = df.columns.str.strip()
+                raw_examples = record.get("example_instances")
+                record["example_instances_parsed"] = convert_tuples(parse_example_instances(raw_examples))
 
-# MITRE CSV başlığındaki tırnak işaretlerini temizler
-df.columns = df.columns.str.replace(
-    "'",
-    "",
-    regex=False
-)
+                raw_taxonomies = record.get("taxonomy_mappings")
+                record["taxonomy_mappings_parsed"] = convert_tuples(parse_taxonomy_mappings(raw_taxonomies))
 
-# Sütun adlarını PostgreSQL veritabanı şemanıza uygun hale getirir
-df.columns = [
-    "id",
-    "name",
-    "abstraction",
-    "status",
-    "description",
-    "alternate_terms",
-    "likelihood_of_attack",
-    "typical_severity",
-    "related_attack_patterns",
-    "execution_flow",
-    "prerequisites",
-    "skills_required",
-    "resources_required",
-    "indicators",
-    "consequences",
-    "mitigations",
-    "example_instances",
-    "related_weaknesses",
-    "taxonomy_mappings",
-    "notes"
-]
+                raw_notes = record.get("notes")
+                record["notes_parsed"] = convert_tuples(parse_notes(raw_notes))
 
+                raw_exec_flow = record.get("execution_flow")
+                record["execution_flow_parsed"] = convert_tuples(parse_execution_flow(raw_exec_flow))
 
-# ============================================================
-# 4. NaN (BOŞ) DEĞERLERİ None (NULL) İLE DEĞİŞTİRME
-# ============================================================
+                capec_records.append(record)
 
-# Pandas NaN değerlerini Python / SQL uyumlu None değerlerine dönüştürür
-df = df.astype(object).where(
-    pd.notna(df),
-    None
-)
+    print(f"[FETCH] Successfully parsed {len(capec_records)} CAPEC records.")
 
-print("Kolonlar hazırlandı.")
+    # Save to local JSON cache
+    try:
+        with open(JSON_CACHE_FILE, "w", encoding="utf-8") as f:
+            json.dump(capec_records, f, ensure_ascii=False, indent=2)
+        print(f"[CACHE] Saved data to {JSON_CACHE_FILE}")
+    except Exception as e:
+        print(f"[CACHE] Warning: Failed to save cache: {e}")
 
+    return capec_records
 
-# ============================================================
-# 5. PARSER (AYRIŞTIRMA) FONKSİYONLARINI ÇALIŞTIRMA
-# ============================================================
-
-print("\nParserlar çalıştırılıyor...")
-
-# Her bir ham metin kolonunu ilgili parser fonksiyonundan geçirerek yapılandırır
-df["related_weaknesses_parsed"] = df["related_weaknesses"].apply(parse_related_weaknesses)
-df["related_attack_patterns_parsed"] = df["related_attack_patterns"].apply(parse_related_attack_patterns)
-df["alternate_terms_parsed"] = df["alternate_terms"].apply(parse_alternate_terms)
-df["prerequisites_parsed"] = df["prerequisites"].apply(parse_prerequisites)
-df["skills_required_parsed"] = df["skills_required"].apply(parse_skills_required)
-df["resources_required_parsed"] = df["resources_required"].apply(parse_resources_required)
-df["indicators_parsed"] = df["indicators"].apply(parse_indicators)
-df["consequences_parsed"] = df["consequences"].apply(parse_consequences)
-df["mitigations_parsed"] = df["mitigations"].apply(parse_mitigations)
-df["example_instances_parsed"] = df["example_instances"].apply(parse_example_instances)
-df["taxonomy_mappings_parsed"] = df["taxonomy_mappings"].apply(parse_taxonomy_mappings)
-df["notes_parsed"] = df["notes"].apply(parse_notes)
-df["execution_flow_parsed"] = df["execution_flow"].apply(parse_execution_flow)
-
-print("Parserlar başarıyla tamamlandı.")
-
-
-# ============================================================
-# 6. JSON / SUPABASE UYUMLULUĞU İÇİN DÖNÜŞÜM HAZIRLIĞI
-# ============================================================
-
-# Supabase JSONB kolonlarına gönderilecek parse edilmiş sütun listesi
-parsed_columns = [
-    "related_weaknesses_parsed",
-    "related_attack_patterns_parsed",
-    "alternate_terms_parsed",
-    "execution_flow_parsed",
-    "prerequisites_parsed",
-    "skills_required_parsed",
-    "resources_required_parsed",
-    "indicators_parsed",
-    "consequences_parsed",
-    "mitigations_parsed",
-    "example_instances_parsed",
-    "taxonomy_mappings_parsed",
-    "notes_parsed"
-]
-
-# Regex sonuçlarındaki Python tuple yapılarını JSON uyumlu listelere dönüştürür
-for column in parsed_columns:
-    df[column] = df[column].apply(convert_tuples)
-
-print("JSON dönüşümü tamamlandı.")
-
-
-# ============================================================
-# 7. TEST VE KONTROL ÇIKTILARI
-# ============================================================
-
-print("\n========================================")
-print("TEST SONUCU")
-print("========================================")
-
-print("Toplam CAPEC kaydı:", len(df))
-
-print("\nİlk CAPEC ID:")
-print(df["id"].iloc[0])
-
-print("\nİlk CAPEC adı:")
-print(df["name"].iloc[0])
-
-print("\nİlk related weaknesses:")
-print(df["related_weaknesses_parsed"].iloc[0])
-
-print("\nİlk execution flow:")
-print(df["execution_flow_parsed"].iloc[0])
-
-print("\n========================================")
-print("SUPABASE'E VERİ GÖNDERİLMEDİ.")
-print("SADECE TEST YAPILDI.")
-print("========================================")
+if __name__ == "__main__":
+    records = load_or_fetch_capec_data(force_refresh=True)
+    print(f"Sample Record ID: {records[0].get('id')}, Name: {records[0].get('name')}")

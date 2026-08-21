@@ -1,19 +1,16 @@
 import re
-import pandas as pd
-
 
 # ============================================================
 # 1. İLİŞKİLİ ZAYIFLIKLAR (RELATED WEAKNESSES) AYIRICI
 # ============================================================
 def parse_related_weaknesses(value):
     """Zayıflık alanındaki :: ile ayrılmış CWE ID'lerini yakalar."""
-    if value is None:
+    if not value:
         return []
 
-    # İki çift iki nokta üst üste (::) arasındaki sayısal değerleri bulur
     return re.findall(
         r"(?<=::)\d+(?=::)",
-        value
+        str(value)
     )
 
 
@@ -22,12 +19,12 @@ def parse_related_weaknesses(value):
 # ============================================================
 def parse_related_attack_patterns(value):
     """Saldırı desenleri arasındaki doğa türünü ve CAPEC ID'yi ayırır."""
-    if value is None:
+    if not value:
         return []
 
     return re.findall(
         r"NATURE:([^:]+):CAPEC ID:(\d+)",
-        value
+        str(value)
     )
 
 
@@ -36,7 +33,7 @@ def parse_related_attack_patterns(value):
 # ============================================================
 def parse_alternate_terms(value):
     """Alternatif terim tanım bloklarındaki metinleri ayıklar."""
-    if pd.isna(value):
+    if not value:
         return []
 
     return re.findall(
@@ -50,13 +47,11 @@ def parse_alternate_terms(value):
 # ============================================================
 def parse_prerequisites(value):
     """Saldırı için gerekli ön koşul ifadelerini yakalar."""
-    if value is None:
+    if not value:
         return []
 
-    return re.findall(
-        r"(?<=::)(.*?)(?=::)",
-        value
-    )
+    matches = re.findall(r"(?<=::)(.*?)(?=::|$)", str(value))
+    return [m.strip() for m in matches if m.strip() and m.strip() != "::"]
 
 
 # ============================================================
@@ -64,19 +59,18 @@ def parse_prerequisites(value):
 # ============================================================
 def parse_skills_required(value):
     """Saldırganın sahip olması gereken beceri ve seviye bilgilerini listeler."""
-    if value is None:
+    if not value:
         return []
 
     matches = re.findall(
         r"SKILL:(.*?):LEVEL:(.*?):",
-        value
+        str(value)
     )
 
-    # Bulunan verileri sözlük (dictionary) listesine dönüştürür
     return [
         {
-            "skill": skill,
-            "level": level
+            "skill": skill.strip(),
+            "level": level.strip()
         }
         for skill, level in matches
     ]
@@ -87,13 +81,11 @@ def parse_skills_required(value):
 # ============================================================
 def parse_resources_required(value):
     """Saldırı için gereken araç veya kaynak tanımlarını ayırır."""
-    if value is None:
+    if not value:
         return []
 
-    return re.findall(
-        r"(?<=::)(.*?)(?=::)",
-        value
-    )
+    matches = re.findall(r"(?<=::)(.*?)(?=::|$)", str(value))
+    return [m.strip() for m in matches if m.strip() and m.strip() != "::"]
 
 
 # ============================================================
@@ -101,13 +93,11 @@ def parse_resources_required(value):
 # ============================================================
 def parse_indicators(value):
     """Saldırı belirtilerini/göstergelerini yakalar."""
-    if value is None:
+    if not value:
         return []
 
-    return re.findall(
-        r"(?<=::)(.*?)(?=::)",
-        value
-    )
+    matches = re.findall(r"(?<=::)(.*?)(?=::|$)", str(value))
+    return [m.strip() for m in matches if m.strip() and m.strip() != "::"]
 
 
 # ============================================================
@@ -115,25 +105,25 @@ def parse_indicators(value):
 # ============================================================
 def parse_consequences(value):
     """Saldırı sonucundaki kapsam (scope) ve teknik etki (technical impact) alanlarını ayırır."""
-    if value is None:
+    if not value:
         return {
             "scope": [],
             "technical_impact": []
         }
 
     scopes = re.findall(
-        r"SCOPE:(.*?)(?=:SCOPE|:TECHNICAL IMPACT|::)",
-        value
+        r"SCOPE:(.*?)(?=:SCOPE|:TECHNICAL IMPACT|::|$)",
+        str(value)
     )
 
     technical_impacts = re.findall(
-        r"TECHNICAL IMPACT:(.*?):",
-        value
+        r"TECHNICAL IMPACT:(.*?)(?=:SCOPE|:TECHNICAL IMPACT|::|$)",
+        str(value)
     )
 
     return {
-        "scope": scopes,
-        "technical_impact": technical_impacts
+        "scope": [s.strip() for s in scopes if s.strip()],
+        "technical_impact": [t.strip() for t in technical_impacts if t.strip()]
     }
 
 
@@ -142,13 +132,11 @@ def parse_consequences(value):
 # ============================================================
 def parse_mitigations(value):
     """Güvenlik önlemleri ve azaltma stratejilerini ayırır."""
-    if value is None:
+    if not value:
         return []
 
-    return re.findall(
-        r"(?<=::)(.*?)(?=::)",
-        value
-    )
+    matches = re.findall(r"(?<=::)(.*?)(?=::|$)", str(value))
+    return [m.strip() for m in matches if m.strip() and m.strip() != "::"]
 
 
 # ============================================================
@@ -156,13 +144,11 @@ def parse_mitigations(value):
 # ============================================================
 def parse_example_instances(value):
     """Gerçek dünya örneklerini barındıran metin bloklarını yakalar."""
-    if value is None:
+    if not value:
         return []
 
-    return re.findall(
-        r"(?<=::)(.*?)(?=::)",
-        value
-    )
+    matches = re.findall(r"(?<=::)(.*?)(?=::|$)", str(value))
+    return [m.strip() for m in matches if m.strip() and m.strip() != "::"]
 
 
 # ============================================================
@@ -170,7 +156,7 @@ def parse_example_instances(value):
 # ============================================================
 def parse_taxonomy_mappings(value):
     """Farklı sınıflandırma sistemleriyle (örn. CWE, ATT&CK) eşleşme bilgilerini düzenler."""
-    if pd.isna(value):
+    if not value:
         return []
 
     matches = re.findall(
@@ -180,9 +166,9 @@ def parse_taxonomy_mappings(value):
 
     return [
         {
-            "taxonomy_name": taxonomy_name,
-            "entry_id": entry_id,
-            "entry_name": entry_name
+            "taxonomy_name": taxonomy_name.strip(),
+            "entry_id": entry_id.strip(),
+            "entry_name": entry_name.strip()
         }
         for taxonomy_name, entry_id, entry_name in matches
     ]
@@ -193,18 +179,18 @@ def parse_taxonomy_mappings(value):
 # ============================================================
 def parse_notes(value):
     """Kayıt içerisindeki notların türünü ve açıklamasını ayrıştırır."""
-    if value is None:
+    if not value:
         return []
 
     matches = re.findall(
         r"TYPE:(.*?):NOTE:(.*?)(?::::|$)",
-        value
+        str(value)
     )
 
     return [
         {
-            "type": note_type,
-            "note": note
+            "type": note_type.strip(),
+            "note": note.strip()
         }
         for note_type, note in matches
     ]
@@ -215,12 +201,12 @@ def parse_notes(value):
 # ============================================================
 def parse_execution_flow(value):
     """Saldırının adım adım ilerleyişini, evrelerini ve kullanılan teknikleri parçalar."""
-    if value is None:
+    if not value:
         return []
 
     step_blocks = re.findall(
         r"::STEP:(\d+):PHASE:(.*?):DESCRIPTION:(.*?)(?=::STEP:|$)",
-        value
+        str(value)
     )
 
     results = []
@@ -232,7 +218,7 @@ def parse_execution_flow(value):
         )
 
         description = (
-            description_match.group(1)
+            description_match.group(1).strip()
             if description_match
             else ""
         )
@@ -243,14 +229,15 @@ def parse_execution_flow(value):
         )
 
         techniques = [
-            technique.rstrip(":")
+            technique.rstrip(":").strip()
             for technique in techniques
+            if technique.strip()
         ]
 
         results.append(
             {
-                "step": step,
-                "phase": phase,
+                "step": step.strip(),
+                "phase": phase.strip(),
                 "description": description,
                 "techniques": techniques
             }
